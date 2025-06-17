@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface ImageDimensions {
@@ -12,16 +13,20 @@ interface ResizeControlsProps {
   originalDimensions: ImageDimensions;
   targetDimensions: ImageDimensions;
   maintainAspectRatio: boolean;
+  quality: number;
   onDimensionChange: (width: number, height: number) => void;
   onAspectRatioToggle: (maintain: boolean) => void;
+  onQualityChange: (quality: number) => void;
 }
 
 const ResizeControls: React.FC<ResizeControlsProps> = ({
   originalDimensions,
   targetDimensions,
   maintainAspectRatio,
+  quality,
   onDimensionChange,
   onAspectRatioToggle,
+  onQualityChange,
 }) => {
   return (
     <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
@@ -63,6 +68,24 @@ const ResizeControls: React.FC<ResizeControlsProps> = ({
           <label htmlFor="aspectRatio" className="text-sm font-medium text-gray-700">
             Lock aspect ratio
           </label>
+        </div>
+
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700">
+            Quality: {Math.round(quality * 100)}%
+          </label>
+          <Slider
+            value={[quality]}
+            onValueChange={(value) => onQualityChange(value[0])}
+            min={0.1}
+            max={1}
+            step={0.01}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-gray-500">
+            <span>Smaller file</span>
+            <span>Better quality</span>
+          </div>
         </div>
 
         <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">

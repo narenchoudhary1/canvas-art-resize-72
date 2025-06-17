@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import UploadArea from '@/components/UploadArea';
@@ -28,6 +27,9 @@ const Index = () => {
   const [maintainAspectRatio, setMaintainAspectRatio] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [quality, setQuality] = useState(0.9);
+  const [originalFileSize, setOriginalFileSize] = useState(0);
+  const [resizedFileSize, setResizedFileSize] = useState(0);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
@@ -38,13 +40,55 @@ const Index = () => {
       setOriginalImage(img);
       setOriginalDimensions({ width: img.width, height: img.height });
       setTargetDimensions({ width: img.width, height: img.height });
+      setOriginalFileSize(file.size);
+      
+      // Automatically set quality based on image size
+      const pixels = img.width * img.height;
+      if (pixels > 2000000) { // Large images (> 2MP)
+        setQuality(0.8);
+      } else if (pixels > 500000) { // Medium images (> 0.5MP)
+        setQuality(0.85);
+      } else {
+        setQuality(0.9); // Small images
+      }
+      
       toast({
         title: "✨ Image loaded!",
-        description: `${img.width}×${img.height}px ready to resize`,
+        description: `${img.width}×${img.height}px (${(file.size / 1024 / 1024).toFixed(2)}MB)`,
       });
     };
     img.src = URL.createObjectURL(file);
   }, [toast]);
+
+  // Auto-update canvas when dimensions or quality change
+  useEffect(() => {
+    if (originalImage) {
+      updateCanvas();
+    }
+  }, [targetDimensions, quality, originalImage]);
+
+  const updateCanvas = async () => {
+    if (!originalImage || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = targetDimensions.width;
+    canvas.height = targetDimensions.height;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    ctx.drawImage(originalImage, 0, 0, targetDimensions.width, targetDimensions.height);
+    
+    // Calculate estimated file size
+    canvas.toBlob((blob) => {
+      if (blob) {
+        setResizedFileSize(blob.size);
+      }
+    }, 'image/jpeg', quality);
+  };
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -99,54 +143,40 @@ const Index = () => {
     });
   };
 
-  const resizeImage = async () => {
-    if (!originalImage || !canvasRef.current) return null;
+  const downloadImage = async () => {
+    if (!canvasRef.current) return;
     
     setIsProcessing(true);
     
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    canvas.width = targetDimensions.width;
-    canvas.height = targetDimensions.height;
-
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    
-    ctx.drawImage(originalImage, 0, 0, targetDimensions.width, targetDimensions.height);
-    
-    setIsProcessing(false);
-    return canvas;
-  };
-
-  const downloadImage = async () => {
-    const canvas = await resizeImage();
-    if (!canvas) return;
-
     canvas.toBlob((blob) => {
       if (!blob) return;
       
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `resized-${targetDimensions.width}x${targetDimensions.height}.png`;
+      a.download = `resized-${targetDimensions.width}x${targetDimensions.height}-q${Math.round(quality * 100)}.jpg`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
+      setIsProcessing(false);
+      
       toast({
         title: "🎉 Downloaded!",
-        description: `Your ${targetDimensions.width}×${targetDimensions.height}px image is ready`,
+        description: `${targetDimensions.width}×${targetDimensions.height}px (${(blob.size / 1024 / 1024).toFixed(2)}MB)`,
       });
-    }, 'image/png', 1.0);
+    }, 'image/jpeg', quality);
   };
 
   const resetImage = () => {
     setOriginalImage(null);
     setOriginalDimensions({ width: 0, height: 0 });
     setTargetDimensions({ width: 0, height: 0 });
+    setOriginalFileSize(0);
+    setResizedFileSize(0);
+    setQuality(0.9);
   };
 
   return (
@@ -161,7 +191,7 @@ const Index = () => {
             Image Resizer
           </h1>
           <p className="text-gray-600 max-w-md mx-auto text-sm md:text-base">
-            Professional image resizing with instant preview
+            Professional image resizing with quality control and size comparison
           </p>
         </div>
 
@@ -182,8 +212,10 @@ const Index = () => {
                   originalDimensions={originalDimensions}
                   targetDimensions={targetDimensions}
                   maintainAspectRatio={maintainAspectRatio}
+                  quality={quality}
                   onDimensionChange={updateDimensions}
                   onAspectRatioToggle={setMaintainAspectRatio}
+                  onQualityChange={setQuality}
                 />
 
                 <PresetButtons onPresetSelect={applyPresetSize} />
@@ -197,6 +229,8 @@ const Index = () => {
               originalImage={originalImage}
               originalDimensions={originalDimensions}
               targetDimensions={targetDimensions}
+              originalFileSize={originalFileSize}
+              resizedFileSize={resizedFileSize}
               canvasRef={canvasRef}
             />
 
